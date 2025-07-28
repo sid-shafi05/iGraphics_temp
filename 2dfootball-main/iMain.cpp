@@ -2,6 +2,7 @@
 #include<string.h>
 #include<math.h>
 #include<stdlib.h>
+#include "iSound.h"
 
 Sprite players[6],opponents[6],gk[2],fball, pauseButtons;
 Image ball[1],player[1],opponent[1],field, backButton, pauseButton; 
@@ -19,48 +20,70 @@ double playerposition[2][6][4]={{{width/2,length*8/10,width/2,length*8/10,}, {wi
 double newplayerposition[2][6][4]={{{width/2,length*8/10,width/2,length*8/10,}, {width/6,length*8/10,width/6,length*8/10}, {width*5/6,length*8/10,width*5/6,length*8/10} ,{width*4/6,length*7/10,width*4/6,length*7/10} ,{width*2/6,length*7/10,width*2/6,length*7/10}, {width/2,length*6/10,width/2,length*6/10} },{ {width/2,length*2/10,width/2,length*2/10},{width/6,length*2/10,width/6,length*2/10},{width*5/6,length*2/10,width*5/6,length*2/10},{width*4/6,length*7/20,width*4/6,length*7/20} ,{width*2/6,length*7/20,width*2/6,length*7/20}, {width/2,length/2,width/2,length/2} }};
 double ballpointer[4]={width/2,length/2};
 int activeplayer=5,ballstate=2,ballholder=activeplayer,activeplayeropp=5,helpingplayer=4,helpingplayeropp=4,lastTouch=1;
-int page_number=0,coverpagetime=100;
+int page_number=3,coverpagetime=100;
 double dxy=30;
 double positionField[2][6][4]={{{4*width/7, 3*width/7, length-gallary, length/2}, {3*width/7, gallary, length-gallary, 10*length/20}, {width-gallary, 4*width/7,  length-gallary, 10*length/20} , {width-gallary, 4*width/7, 10*length/20, gallary}, {3*width/7, gallary, 10*length/20, gallary}, {4*width/7, 3*width/7, length/2, gallary}}, {{4*width/7, 3*width/7, length/2, gallary}, {3*width/7, gallary, 10*length/20, gallary}, {width-gallary, 4*width/7, 10*length/20, gallary},{width-gallary, 4*width/7, length-gallary, 10*length/20}, {3*width/7, gallary, length-gallary, 10*length/20},  {4*width/7, 3*width/7, length-gallary, length/2}}};
 int dX=60, dY=100;
 int frameCount = 0;
 int previousTime = 0, previousFpsTime = 0;
 int fps = 0;
-double varFriction = 0.95;
+int volume=100;
+int kickoff=0;
+int whistlePlayed=0;
+int crowdPlaying = 0;
+int passInitiated = 0;
+int crowdChannel = -1;
+int kickChannel = -1;
+int goalChannel = -1;
+void whistle_sound() {
+    if (!whistlePlayed) {
+        printf("Attempting to load whistle.wav\n");
+        int channel = iPlaySound("whistle.wav", false, volume);
+        if (channel == -1) {
+            printf("Failed to play whistle.wav: %s\n", Mix_GetError());
+        }
+        whistlePlayed = 1;
+    }
+}
+void crowd_sound(){
+    if(whistle_sound){
+        iPlaySound("crowd.wav", true, volume);
+    }
+}
+int const max_shoot=15;
+double spacing=30;
+double penaltyPosition[2][6][2]={{{width/2+spacing*1,length/2},{width/2+spacing*2,length/2},{width/2+spacing*3,length/2},{width/2+spacing*4,length/2},{width/2+spacing*5,length/2},{width/2+spacing*6,length/2}},{{width/2-spacing*1,length/2},{width/2-spacing*2,length/2},{width/2-spacing*3,length/2},{width/2-spacing*4,length/2},{width/2-spacing*5,length/2},{width/2-spacing*6,length/2}}};
+double penaltygk[2][2]={{width/2,length - gallary - playerradius},{width/6,length - gallary - playerradius}};
+double penaltyPositionNew[2][6][2]={{{width/2+spacing*1,length/2},{width/2+spacing*2,length/2},{width/2+spacing*3,length/2},{width/2+spacing*4,length/2},{width/2+spacing*5,length/2},{width/2+spacing*6,length/2}},{{width/2-spacing*1,length/2},{width/2-spacing*2,length/2},{width/2-spacing*3,length/2},{width/2-spacing*4,length/2},{width/2-spacing*5,length/2},{width/2-spacing*6,length/2}}};
+double penaltygkNew[2][2]={{width/2,length - gallary - playerradius},{width/6,length - gallary - playerradius}};
+double penaltyBall[4]={0,0,0,0};
+int activeTeam=0;
+int gkSet=0;
+int gkDirection=1;
+double penGkSpeed=0.6;
+int kicked=0;
+double penAcceleration[2]={0,0};
+int penScore[2][max_shoot]={0};
+double penBallSpeedConstant=.7;
+double penBallSpeed=1;
+double speedFraction=50;
+double barHieght=200;
+int barDiraction=1;
+int shootNumber=0;
+int penaltyscores[2]={0,0};
+double hypo=1;
+double barspeed=0.35;
+int penaltyended=0;
 
-//Penalty
-//Penalty
-#define MAX_SHOTS 20
-double  playerX[MAX_SHOTS];  
-int     playerResult[MAX_SHOTS]={0};
-int     playerCount = 0;
-
-double  oppX[MAX_SHOTS];
-int     oppResult[MAX_SHOTS]={0};
-int     oppCount    = 0;
 
 
-int penaltyActive = 0;             // Flag to indicate penalty mode  
-double targetX = -1, targetY = -1; // Clicked target position
-double gkMoveDirection = 1;        // 1 for right, -1 for left
-long long int gkMoveTimer = 0;     // Timer for goalkeeper movement
-int activeTeam = 0;     // 0 for player team, 1 for opponent team
-int scoreMark = 0;      // Flag to indicate if a score has been marked
-double ballSpeed = 3.0; // Speed of the ball during penalty
-int penaltyTurn = 0;    // Track the current penalty turn
-# define maxPenalties 5 // Maximum penalties per team
-double playerMark[2*maxPenalties];
-double opponentMark[2*maxPenalties];
-int    playerMarkCount   = 0;
-int    opponentMarkCount = 0;
-//Penalty meter
-double penaltyMeterX ; // X position of the penalty meter// Y position of the penalty meter
-double penaltyMeterMaxY=gallary+100 ; // Maximum Y position of the meter
-double penaltyMeterMinY = gallary + 20; // Minimum Y position of the meter
-double penaltyMeterY = penaltyMeterMinY; 
-int meterDirection = 1; // Direction of the meter movement (1 for right, -1 for left)
-double midY = (penaltyMeterMinY +penaltyMeterMaxY) * 0.5;
-const double meterSpeed = .05; // Speed of the meter movement
+bool checkcollision(double x1,double y1,double x2, double y2, double r)
+{
+    if((x1-x2)*(x1-x2)+(y1-y2)*(y1-y2)<=r*r)
+        return true;
+    else
+        return false;
+}
 
 void iShowSpeed(double x, double y)
 {
@@ -87,287 +110,7 @@ void iShowSpeed(double x, double y)
     sprintf(fpsText, "FPS: %d", fps);
     iText(x, y, fpsText);
 }
-bool checkcollision(double x1, double y1, double x2, double y2, double r)
-{
-    if ((x1 - x2) * (x1 - x2) + (y1 - y2) * (y1 - y2) <= r * r)
-        return true;
-    else
-        return false;
-}
-void meterUpdate(){
-    if(meterDirection == 1) {
-        penaltyMeterY += meterSpeed;
-        if(penaltyMeterY >= penaltyMeterMaxY) {
-            meterDirection = -1; // Change direction to left
-        }
-    } else {
-        penaltyMeterY -= meterSpeed;
-        if(penaltyMeterY <= penaltyMeterMinY) {
-            meterDirection = 1; // Change direction to right
-        }
-    }
-}
-void drawMeter(){
-     penaltyMeterX=width-100;
-     iSetColor(200,200,200);
-     iRectangle(penaltyMeterX, penaltyMeterMinY, 10, penaltyMeterMaxY - penaltyMeterMinY);
-        iSetColor(255,255,255);
-        iLine(penaltyMeterX,penaltyMeterY, penaltyMeterX + 10, penaltyMeterY);
-    iSetColor(255,255,0);               // bright yellow tick
-    iLine(penaltyMeterX, midY, penaltyMeterX + 10, midY);
-    }
-void spritepositionupdate()
-{
-    for (i = 0; i < 6; i++)
-    {
-        iSetSpritePosition(&players[i], playerposition[1][i][0] - playerradius, playerposition[1][i][1] - playerradius);
-        iSetSpritePosition(&opponents[i], playerposition[0][i][0] - playerradius, playerposition[0][i][1] - playerradius);
-        if (i == 0 || i == 1)
-            iSetSpritePosition(&gk[i], gkpointer[i][0] - playerradius, gkpointer[i][1] - playerradius);
-    }
-    iSetSpritePosition(&fball, ballpointer[0] - ballradius, ballpointer[1] - ballradius);
-}
 
-void spriteshow()
-{
-    // iShowImage(0,0,"field.png");
-    // iShowSprite(&fields);
-    for (i = 0; i < 6; i++)
-    {
-        iShowSprite(&players[i]);
-        iShowSprite(&opponents[i]);
-    }
-    iShowSprite(&gk[0]);
-    iShowSprite(&gk[1]);
-    iShowSprite(&fball);
-    iShowImage(width - 15, length - 15, "pause.png");
-}
-void gameresult(){
-    if (scoreplayer > scoreopp) {
-        iSetColor(0, 255, 0);
-        iTextAdvanced(width / 2 - 50, length / 2, "You Win!", .1, 3);
-    } else if (scoreplayer < scoreopp) {
-        iSetColor(255, 0, 0);
-        iTextAdvanced(width / 2 - 50, length / 2, "You Lose!", .1, 3);
-    } else {
-        iSetColor(255, 255, 0);
-        iTextAdvanced(width / 2 - 50, length / 2, "It's a Draw!", .1, 3);
-    }
-}
-void Penalty()
-{
-    // player
-    if (activeTeam == 1)
-    {
-        playerposition[activeTeam][activeplayer][0] = width / 2;
-        playerposition[activeTeam][activeplayer][1] = length - gallary - (length * .15);
-        gkpointer[0][0] = width / 2;
-        gkpointer[0][1] = length - gallary - playerradius;
-        gkpointer[1][0] = width / 6;
-        gkpointer[1][1] = length - length / 8;
-    }
-    else
-    {
-        playerposition[activeTeam][activeplayer][0] = width / 2;
-        playerposition[activeTeam][activeplayer][1] = length - gallary - (length * .15);
-        gkpointer[1][0] = width / 2;
-        gkpointer[1][1] = length - gallary - playerradius;
-        gkpointer[0][0] = width / 6;
-        gkpointer[0][1] = length - length / 8;
-    }
-    iSetSpritePosition(&players[activeplayer], playerposition[1][activeplayer][0] - playerradius, playerposition[1][activeplayer][1] - playerradius);
-    iSetSpritePosition(&gk[activeTeam], gkpointer[activeTeam][0] - playerradius, gkpointer[activeTeam][1] - playerradius);
-    // ball
-    ballpointer[0] = playerposition[activeTeam][activeplayer][0];
-    ballpointer[1] = playerposition[activeTeam][activeplayer][1];
-    ballpointer[2] = 0;
-    ballpointer[3] = 0;
-    iSetSpritePosition(&fball, ballpointer[0] - ballradius, ballpointer[1] - ballradius);
-    ballstate = 2;
-
-    // others
-    double centerY = length / 2;
-    double spacing = width / 16;
-    int playerIndex = 0;
-
-    for (int i = 0; i < 6; i++)
-    {
-        if (i == activeplayer && activeTeam == 0)
-            continue; // Skip the active player
-        playerposition[0][i][0] = gallary + spacing * (playerIndex + 1);
-        playerposition[0][i][1] = centerY;
-        iSetSpritePosition(&players[i], playerposition[0][i][0] - playerradius, playerposition[0][i][1] - playerradius);
-        playerIndex++;
-    }
-
-    for (int i = 0; i < 6; i++)
-    {
-        if (i == activeplayer && activeTeam == 1)
-            continue; // Skip the active player
-        playerposition[1][i][0] = gallary + spacing * (playerIndex + 1);
-        playerposition[1][i][1] = centerY;
-        iSetSpritePosition(&opponents[i], playerposition[1][i][0] - playerradius, playerposition[1][i][1] - playerradius);
-        playerIndex++;
-    }
-}
-void swapteams()
-{
-    if (ballstate == 2 && penaltyActive && scoreMark != 0)
-    {
-        activeTeam = 1 - activeTeam; // Swap teams
-        penaltyTurn++;
-        scoreMark = 0; // Reset score mark flag
-        if (penaltyTurn >= 10)
-        { // 5 shots each
-            if (scoreplayer != scoreopp)
-            {
-                penaltyActive = 0;
-            }
-            // Else continue sudden death
-        }
-        else if (penaltyTurn >= 2 * maxPenalties)
-        {
-            if (abs(scoreplayer - scoreopp) > (10 - penaltyTurn) / 2)
-            {
-                penaltyActive = 0; // Can't catch up
-            }
-        }
-    }
-}
-void penaltyGK(){
-        static int firstFrame = 1;
-        if (firstFrame)
-        {
-            gkpointer[1 - activeTeam][0] = width / 2;
-            gkpointer[1 - activeTeam][1] = length - gallary - playerradius; // Bottom goalpost
-            iSetSpritePosition(&gk[1 - activeTeam], gkpointer[1 - activeTeam][0] - playerradius, gkpointer[1 - activeTeam][1] - playerradius);
-            Penalty(); // Set up initial penalty state
-            firstFrame = 0;
-            // gk2
-            gkpointer[activeTeam][0] = width / 6;
-            gkpointer[activeTeam][1] = length - length / 8;
-            iSetSpritePosition(&gk[activeTeam], gkpointer[activeTeam][0] - playerradius, gkpointer[activeTeam][1] - playerradius);
-        }
-        printf("iDraw called | ballstate: %d | ballpointer: %f, %f\n", ballstate, ballpointer[0], ballpointer[1]);
-
-        // Goalkeeper movement
-        double leftpost = width / 2 - 80;
-        double rightpost = width / 2 + 80;
-        if (gkpointer[1 - activeTeam][0] < leftpost)
-            gkMoveDirection = 1; // Right
-        else if (gkpointer[1 - activeTeam][0] > rightpost)
-            gkMoveDirection = -1; // Left
-        gkpointer[1 - activeTeam][0] += gkMoveDirection * gkspeed / 2;
-        iSetSpritePosition(&gk[1 - activeTeam], gkpointer[1 - activeTeam][0] - playerradius, gkpointer[1 - activeTeam][1] - playerradius);
-    }
-void drawPenaltyScoreboard()
-{
-    char player_text[50];
-    char opponent_text[50];
-    sprintf(player_text,"Pla:\n");
-    sprintf(opponent_text,"Opp:\n");
-    iSetColor(255, 255, 255);
-    iTextAdvanced(2*width/3+gallary, length - gallary/3, player_text, .1, 2);
-    iTextAdvanced(2*width/3+gallary, length - 2*gallary/3, opponent_text, .1, 2);
-}
-void penaltyCollisionCheck(){
-        if (ballstate == 0) {
-        // Apply velocity
-        ballpointer[0] += ballpointer[2];
-        ballpointer[1] += ballpointer[3];
-        // Friction
-        ballpointer[2] *= varFriction;
-        ballpointer[3] *= varFriction;
-        iSetSpritePosition(&fball,
-            ballpointer[0] - ballradius,
-            ballpointer[1] - ballradius
-        );
-
-        // Check for GK collision or out‑of‑bounds → miss
-        if ( checkcollision(
-                ballpointer[0], ballpointer[1],
-                gkpointer[1 - activeTeam][0], gkpointer[1 - activeTeam][1],
-                playerradius + ballradius
-            )
-            || ballpointer[0] <= width/2 - 80
-            || ballpointer[0] >= width/2 + 80
-        ) {
-            ballstate = 2;
-            scoreMark = -1;
-        }
-        // Check for crossing the goal‑line
-        else if ( ballpointer[1] >= length - gallary - playerradius-ballradius) {
-            ballstate = 2;
-            if ( ballpointer[0] > width/2 - 80 && ballpointer[0] < width/2 + 80 ) {
-                scoreMark = 1;  // goal
-                if (activeTeam == 0) scoreplayer++;
-                else                scoreopp++;
-            }
-            else {
-                scoreMark = -1;  // miss
-                if (activeTeam == 0) scoreplayer++;
-                else                scoreopp++;
-            }
-        }
-
-        // If it’s almost stopped → settle
-        if ( fabs(ballpointer[2]) < 0.001 && fabs(ballpointer[3]) < 0.001 )
-            ballstate = 2;
-        if (ballstate == 2 && scoreMark == 0) {
-        // never scored or missed yet, so this is a miss
-        scoreMark = -1;
-}
-    }
-}
-void penaltyScore() {
-
-    penaltyCollisionCheck();
-    if ( ballstate == 2 && scoreMark != 0 ) {
-        // Compute X for the new marker
-        double x = 2*width/3+gallary +40+ (activeTeam == 0 ? playerCount : oppCount) * 15;
-
-        // Record into correct team’s array
-        if ( activeTeam == 0 && playerCount < MAX_SHOTS ) {
-            playerX[playerCount]      = x;
-            playerResult[playerCount] = scoreMark;
-            playerCount++;
-        }
-        else if ( activeTeam == 1 && oppCount < MAX_SHOTS ) {
-            oppX[oppCount]      = x;
-            oppResult[oppCount] = scoreMark;
-            oppCount++;
-        }
-
-        // Swap sides and reset for next kick
-        swapteams();
-        Penalty();
-
-        // Clear the flag so we don’t double‑record
-        scoreMark = 0;
-    }
-
-    // 3) Always update & draw sprites
-    spritepositionupdate();
-    spriteshow();
-}
-void drawPenaltyMarkers() {
-    // Player’s row (top):
-    for (int i = 0; i < playerCount; i++) {
-        if (playerResult[i] ==  1) { iSetColor(0,255,0); }
-        else if (playerResult[i] == -1) { iSetColor(255,0,0); }
-        else continue;  // skip zeros
-        iFilledCircle(playerX[i], length - gallary/3, 6);
-    }
-    // Opponent’s row (below):
-    for (int i = 0; i < oppCount; i++) {
-        if (oppResult[i] ==  1) { iSetColor(0,255,0); }
-        else if (oppResult[i] == -1) { iSetColor(255,0,0); }
-        else continue;
-        iFilledCircle(oppX[i], length - gallary*2/3, 6);
-    }
-    // reset drawing color for the rest of your code
-    iSetColor(255,255,255);
-}
 /*int igetspeed()
 {
     int currentTime = glutGet(GLUT_ELAPSED_TIME);
@@ -395,7 +138,7 @@ void drawPenaltyMarkers() {
 void loadresources()
 {
     
-    iLoadImage(&backButton , "pause.png");
+    iLoadImage(&backButton , "back.png");
 
     iLoadFramesFromSheet(ball, "ball.png" ,1,1);
     iChangeSpriteFrames(&fball,ball,1);
@@ -430,13 +173,22 @@ void loadresources()
     }
 }
 
-void resetvariables()
+void resetvariables() 
 {
-    memcpy(ballpointer,newball,4*sizeof(double));
-    memcpy(gkpointer,newgk,4*sizeof(double));
-    memcpy(playerposition, newplayerposition,2*6*4*sizeof(double)) ;
-    activeplayer=5;ballstate=1;ballholder=5;
-    gametime=0;
+    memcpy(ballpointer, newball, 4 * sizeof(double));
+    memcpy(gkpointer, newgk, 4 * sizeof(double));
+    memcpy(playerposition, newplayerposition, 2 * 6 * 4 * sizeof(double));
+    activeplayer = 5;
+    ballstate = 1;
+    ballholder = 5;
+    gametime = 0;
+    whistlePlayed = 0;
+    crowdPlaying = 0;
+    passInitiated = 0;
+    crowdChannel = -1;
+    kickChannel = -1;
+    goalChannel = -1;
+    iStopAllSounds();
 }
 
 int playerOnTheWay(double x1,double y1,double x3,double y3,double x2,double y2,double r)
@@ -594,6 +346,11 @@ void chooseAndTakePosition()
                     playerposition[0][j][1]+= constSpeed*(playerposition[0][j][3]-playerposition[0][j][1])/sqrt(1+(playerposition[0][j][2]-playerposition[0][j][0])*(playerposition[0][j][2]-playerposition[0][j][0])+(playerposition[0][j][3]-playerposition[0][j][1])*(playerposition[0][j][3]-playerposition[0][j][1])); 
                 }
             }
+        }
+        else
+        {
+            playerposition[0][j][2]=playerposition[0][j][0];
+            playerposition[0][j][3]=playerposition[0][j][1];
         }
     }
 }
@@ -922,11 +679,21 @@ void throwCornerOutGoal()
             if(ballpointer[1]<gallary-ballradius)
             {
                 scoreopp+=1;
+                printf("Attempting to load goal.wav\n");
+            goalChannel = iPlaySound("goal.wav", false, volume);
+            if (goalChannel == -1) {
+                printf("Failed to play goal.wav: %s\n", Mix_GetError());
+            }
                 ballstate=2;ballholder=5;
             }
             else if(ballpointer[1]>length-gallary+ballradius)
             {
                 scoreplayer+=1;
+                printf("Attempting to load goal.wav\n");
+            goalChannel = iPlaySound("goal.wav", false, volume);
+            if (goalChannel == -1) {
+                printf("Failed to play goal.wav: %s\n", Mix_GetError());
+            }
                 playerposition[0][5][0]=width/2;
                 playerposition[0][5][1]=length/2;
                 playerposition[1][5][0]=width/2;
@@ -938,16 +705,43 @@ void throwCornerOutGoal()
     }
 }
 
+void spritepositionupdate()
+{
+    if(page_number==1 || page_number==2)
+    {
+        for(i=0;i<6;i++)
+        {
+            iSetSpritePosition(&players[i],playerposition[1][i][0]-playerradius,playerposition[1][i][1]-playerradius);
+            iSetSpritePosition(&opponents[i],playerposition[0][i][0]-playerradius,playerposition[0][i][1]-playerradius);
+            if(i==0 || i==1)
+                iSetSpritePosition(&gk[i],gkpointer[i][0]-playerradius,gkpointer[i][1]-playerradius);
+        }
+        iSetSpritePosition(&fball,ballpointer[0]-ballradius,ballpointer[1]-ballradius);
+        iSetSpritePosition(&pauseButtons,width-15,length-15);
+    }
+    else if(page_number==3)
+    {
+        for(i=0;i<6;i++)
+        {
+            iSetSpritePosition(&players[i],penaltyPosition[1][i][0]-playerradius,penaltyPosition[1][i][1]-playerradius);
+            iSetSpritePosition(&opponents[i],penaltyPosition[0][i][0]-playerradius,penaltyPosition[0][i][1]-playerradius);
+            if(i==0 || i==1)
+                iSetSpritePosition(&gk[i],penaltygk[!i][0]-playerradius,penaltygk[!i][1]-playerradius);
+        }
+        iSetSpritePosition(&fball,penaltyBall[0]-ballradius,penaltyBall[1]-ballradius);
+        iSetSpritePosition(&pauseButtons,width-15,length-15);
+    }
+}
 
 void timeUpdater(){
-    printf("%d  %.3lf  %d %d\n",fps,timer,sec,minit);
+    //printf("%d  %.3lf  %d %d\n",fps,timer,sec,minit);
     if(fps!=0)
         timer=timer+(120.0/(fps));
     sec=timer/120;
     minit=timer/7200;
     if((page_number==1 || page_number==2) && !(ballstate==2 || ballstate==-2))
     {
-        gametime+=1;
+        gametime=gametime+(120.0/(fps));
     }
 }
 
@@ -984,10 +778,17 @@ void activepassing()
 {
     if(ballstate==1 || ballstate==2)
     {
-        if(isKeyPressed('p'))
-            passedballspeed=passedballspeed;
-        else if(isKeyPressed('l'))
-            passedballspeed=shootballspeed;
+        if(isKeyPressed('p')){
+            passInitiated = 1;
+            iPlaySound("kick.wav",false,volume);
+            whistle_sound();
+            crowd_sound();        
+        }
+        else if(isKeyPressed('l')){
+            passInitiated = 1;
+            iPlaySound("kick.wav",false,volume);
+            
+        }
         
         if(isKeyPressed('p') || isKeyPressed('l'))
         {
@@ -1099,11 +900,14 @@ void opponentpassing()
 {
     if(ballstate==-1 || ballstate==-2)
     {
-        if(isKeyPressed('t'))
+        if(isKeyPressed('t')){
+            iPlaySound("kick.wav",false,volume);
             passedballspeed=passedballspeed;
-        else if(isKeyPressed('g'))
+        }
+        else if(isKeyPressed('g')){
+            iPlaySound("kick.wav",false,volume);
             passedballspeed=shootballspeed;
-        
+        }
         if(isKeyPressed('t') || isKeyPressed('g'))
         {
             ballpointer[2]=0;
@@ -1351,9 +1155,25 @@ void ballposition()
     }
 }
 
+void spriteshow()
+{
+    //iShowImage(0,0,"field.png");
+    //iShowSprite(&fields);
+    for(i=0;i<6;i++)
+    {
+        iShowSprite(&players[i]);
+        iShowSprite(&opponents[i]);
+    }
+    iShowSprite(&gk[0]);
+    iShowSprite(&gk[1]);
+    iShowSprite(&fball);
+    //iShowLoadedImage(width-15,length-15,&pauseButton);
+    iShowSprite(&pauseButtons);
+}
+
 void backbutton()
 {
-    iShowLoadedImage(5,50, &backButton);
+    iShowLoadedImage(width-70,50, &backButton);
 }
 
 void drawfield()
@@ -1385,7 +1205,6 @@ void drawfield()
     iSetLineWidth(4);
     iLine(width/2-80,gallary,width/2+80,gallary);
     iLine(width/2-80,length-gallary,width/2+80,length-gallary);
-    drawScoreboard();
 }
 
 void functioncaller()
@@ -1393,17 +1212,18 @@ void functioncaller()
     
     if((int)timer%10==0)
     {
-        throwCornerOutGoal();
+        throwCornerOutGoal(); 
         activepassing();
         opponentpassing();
     }
     if((int)timer%5==0){
         if(!(ballstate==2 || ballstate==-2))
             chooseAndTakePosition();
-        if(ballstate!=2)
+        if(ballstate!=2 && ballstate!=-2)
+        {
             activeplayermoveing();
-        if(ballstate!=-2)
             opponentplayermoveing();
+        }
         gkmoving();
         ballposition();
     }
@@ -1418,6 +1238,285 @@ void chooselevel()
 
 }
 
+
+
+void resetPenaltyVariables()
+{
+    activeTeam = 0;
+    gkSet = 0;
+    gkDirection = 1;
+    kicked = 0;
+    penAcceleration[0] = 0;
+    penAcceleration[1] = 0;
+    memset(penScore, 0, sizeof(penScore));
+    penBallSpeed = penBallSpeedConstant;
+    barDiraction = 1;
+    shootNumber = 0;
+    penaltyscores[0] = 0;
+    penaltyscores[1] = 0;
+    hypo = 1;
+    penaltyended = 0;
+    whistlePlayed = 0;
+    crowdPlaying = 0;
+    passInitiated = 0;
+    crowdChannel = -1;
+    kickChannel = -1;
+    goalChannel = -1;
+    iStopAllSounds();
+}
+void resetflags()
+{
+    activeTeam=1-activeTeam;
+    gkSet=0;
+    kicked=0;
+    speedFraction=50;
+}
+
+void gkAndPlayerPosition()
+{
+    if(!kicked)
+    {
+        penaltyBall[0]=penaltyPosition[activeTeam][5][0];
+        penaltyBall[1]=penaltyPosition[activeTeam][5][1];
+    }
+    penaltyPosition[activeTeam][5][0]=width/2;
+    penaltyPosition[activeTeam][5][1]=length - gallary - (length * .15);
+
+    penaltyPosition[!activeTeam][5][0]=width/2- pow(-1,activeTeam)*spacing*6;
+    penaltyPosition[!activeTeam][5][1]=length/2;
+    penaltygk[activeTeam][0]=width/6;
+    penaltygk[activeTeam][1]=length*15.0/16.0;
+    if(gkSet==0)
+    {
+        penaltygk[!activeTeam][0]=width/2;
+        penaltygk[!activeTeam][1]=length-gallary;
+        gkSet=1;
+    }
+    else
+    {
+        if(penaltygk[!activeTeam][0]>width/2+goalbar/2)
+        {
+            penaltygk[!activeTeam][0]=width/2+goalbar/2;
+            gkDirection=-1;
+        }
+        else if(penaltygk[!activeTeam][0]<width/2-goalbar/2)
+        {
+            penaltygk[!activeTeam][0]=width/2-goalbar/2;
+            gkDirection=1;
+        }
+        else
+        {
+            penaltygk[!activeTeam][0]+=gkDirection*penGkSpeed;
+        }
+    }
+}
+
+void penaltyBallMoving()
+{
+    if(kicked==1)
+    {
+        //if(!(penaltyBall[2]==0 || (penAcceleration[0]>0 && penaltyBall[2]>0) || (penAcceleration[0]<0 && penaltyBall[2]<0)))
+        {
+            penaltyBall[0]+=penaltyBall[2];
+            penaltyBall[2]+=penAcceleration[0];
+        }
+        //if(!(ballpointer[3]==0 || (penAcceleration[1]>0 && penaltyBall[3]>0) || (penAcceleration[1]<0 && penaltyBall[3]<0)))
+        {
+            penaltyBall[1]+=penaltyBall[3];
+            penaltyBall[3]+=penAcceleration[1];
+        }
+    }
+}
+
+void ballDirection(double x,double y)
+{
+    if(!kicked)
+    {
+        if(speedFraction>30)
+            penBallSpeed=(penBallSpeedConstant*speedFraction/100)+penBallSpeedConstant*0.5;
+        else
+            penBallSpeed=penBallSpeedConstant*speedFraction/100;
+        hypo=sqrt(pow((penaltyBall[0]-ballradius-x),2)+pow((penaltyBall[1]-ballradius-y),2));
+        if(hypo<1)
+            return;
+        penaltyBall[2]=penBallSpeed*(x-penaltyBall[0]+ballradius)/hypo;
+        penaltyBall[3]=penBallSpeed*(y-penaltyBall[1]+ballradius)/hypo;
+        penAcceleration[0]=0.3*acceleration*(x-penaltyBall[0]+ballradius)/hypo;
+        penAcceleration[1]=0.3*acceleration*(y-penaltyBall[1]+ballradius)/hypo;
+    }
+    kicked=1;
+}
+
+void penaltyScore()
+{
+    if(kicked==1)
+    {
+        if(checkcollision(penaltyBall[0],penaltyBall[1],penaltygk[!activeTeam][0],penaltygk[!activeTeam][1],(playerradius+ballradius)))
+        {
+            penScore[activeTeam][shootNumber]=-1;
+            if(activeTeam==1)
+                shootNumber+=1;
+            resetflags();
+            iDelay(2);
+        }
+        else
+        {
+            if(penaltyBall[1]-1.5*ballradius>=length-gallary && penaltyBall[0]+ballradius>=width/2-goalbar/2 && penaltyBall[0]-ballradius<=width/2+goalbar/2)
+            {
+                penScore[activeTeam][shootNumber]=1;
+                penaltyscores[activeTeam]++;
+                printf("Attempting to load goal.wav\n");
+                goalChannel = iPlaySound("goal.wav", false, volume);
+                if (goalChannel == -1) {
+                    printf("Failed to play goal.wav: %s\n", Mix_GetError());
+                }
+                if(activeTeam==1)
+                    shootNumber+=1;
+                resetflags();
+                iDelay(1);
+            }
+            else if((abs((int)(penaltyBall[2]*10))<0.1 && abs((int)(penaltyBall[3]*10))<0.1))
+            {
+                penScore[activeTeam][shootNumber]=-1;
+                if(activeTeam==1)
+                    shootNumber+=1;
+                resetflags();
+                iDelay(1);
+            }
+            else if(penaltyBall[0]<gallary*2 || penaltyBall[0]>width-gallary*2 || penaltyBall[1]<length/2 || penaltyBall[1]>length )
+            {
+                penScore[activeTeam][shootNumber]=-1;
+                if(activeTeam==1)
+                    shootNumber+=1;
+                resetflags();
+                iDelay(1);
+            }
+        }
+    }
+}
+
+void drawscoremarks()
+{
+    iSetColor(255,255,0);
+    char score[10];
+    sprintf(score,"Yello  %d",penaltyscores[0]);
+    iTextAdvanced(1.5*gallary,100-5,score,0.1,1.5);
+    iSetColor(0,0,255);
+    sprintf(score,"Green %d",penaltyscores[1]);
+    iTextAdvanced(1.5*gallary,100-30-5,score,0.1,1.5);
+
+    for(int sc=0;sc<shootNumber+1;sc++)
+    {
+        if(penScore[0][sc]==-1)
+        {
+            iSetColor(255,0,0);
+            iFilledCircle((4*gallary+sc*30),100,9);
+        }
+        else if(penScore[0][sc]==1)
+        {
+            iSetColor(255,255,0);
+            iFilledCircle((4*gallary+sc*30),100,9);
+        }
+        if(penScore[1][sc]==-1)
+        {
+            iSetColor(255,0,0);
+            iFilledCircle((4*gallary+sc*30),100-30,9);
+        }
+        else if(penScore[1][sc]==1)
+        {
+            iSetColor(0,0,255);
+            iFilledCircle((4*gallary+sc*30),100-30,9);
+        }
+    }
+}
+
+void speedBar()
+{
+    if(speedFraction<=0.5)
+    {
+        speedFraction=1;
+        barDiraction=+1;
+    }
+    else if(speedFraction>=99.5)
+    {
+        speedFraction=99;
+        barDiraction=-1;
+    }
+    else
+    {
+        speedFraction=speedFraction+barDiraction*barspeed;
+    }
+}
+
+void drawSpeedBar()
+{
+    iSetColor(255,255,255);
+    iRectangle(width-2*gallary,length/2+barHieght/3,8,barHieght+2);
+    iSetColor(255*(speedFraction)/100,115,0);
+    iFilledRectangle(width-2*gallary+1,length/2+barHieght/3+1,6,barHieght*speedFraction/100);
+}
+
+int result()
+{
+    if(shootNumber==max_shoot)
+    {
+        iTextAdvanced(120,400," DRAW",0.5,3.5);
+    }
+    else if(shootNumber>=5 && penaltyscores[0]!=penaltyscores[1] && activeTeam==0 && kicked==0)
+    {
+        if(penaltyscores[0]>=penaltyscores[1])
+        {
+            iSetColor(255,255,0);
+        }
+        else if(penaltyscores[0]<penaltyscores[1])
+            iSetColor(0,0,255);
+        iTextAdvanced(120,400,"YOU WON",0.5,3.5);
+        backbutton();
+        penaltyended=1;
+        return 1;
+    }
+    else
+        return 0;
+
+}
+
+void volumeMark() {
+    if (volume == 100) {
+        iSetColor(0, 255, 0); // Green for sound ON
+        iFilledRectangle(300, 160, 110, 40);
+        iSetColor(255, 255, 255);
+        iText(330, 170, "ON", GLUT_BITMAP_HELVETICA_18);
+    } else {
+        iSetColor(255, 0, 0); // Red for sound OFF
+        iFilledRectangle(300, 160, 110, 40);
+        iSetColor(255, 255, 255);
+        iText(330, 170, "OFF", GLUT_BITMAP_HELVETICA_18);
+    }
+}
+int scoreSave(){
+    FILE *ifp=NULL;
+    ifp=fopen("scores.txt","a+");
+if(ifp==NULL){
+    printf("Error\n");
+    exit(1);
+fprintf(ifp,"Team 0: %d  %d : Team 1\n",&scoreplayer,&scoreopp);
+fclose(ifp);
+return 1;
+}
+}
+void high_score(){
+    FILE *ofp=fopen("scores.txt","r+");
+    if(ofp==NULL){
+    printf("Error\n");
+    exit(1);
+}
+ while(!feof(ofp)){
+    fscanf(ofp,"Team 0: %d  %d : Team 1",&scoreplayer,&scoreopp);
+    //iText()
+ }
+    
+
+}
 /*
 function iDraw() is called again and again by the system.
 */
@@ -1431,23 +1530,19 @@ void iDraw()
         if(timer<=coverpagetime)
             iShowImage(0,0,"opener.jpg");
         else
-            iShowImage(0,0,"navigation.jpg");
+            iShowImage(0,0,"newnavigation.jpg");
     }
     else if(page_number==11)
     {
         iShowImage(0,0,"level.png");
         backbutton();
     }
-    else if(page_number==12)
-    {
-        iShowImage(0,0,"navigator_2.jpg");
-
-    }
     else if(page_number==1)
     {
         drawfield();
         chooselevel();
         functioncaller();
+        drawScoreboard();
         spritepositionupdate();
         spriteshow();
     }
@@ -1457,25 +1552,43 @@ void iDraw()
         functioncaller();
         spritepositionupdate();
         spriteshow();
+        drawScoreboard();
     }
-    else if(page_number==3){
-        penaltyActive=1;
+    else if(page_number==3)
+    {
         drawfield();
-        drawPenaltyMarkers();// Draw penalty marks
-        drawPenaltyScoreboard();
-        meterUpdate(); // Update the penalty meter position
-        drawMeter(); // Draw the penalty meter
-        penaltyGK(); 
-        penaltyScore(); 
+        if(!result())
+        {
+            if((int)timer%2==0)
+                gkAndPlayerPosition();
+            if((int)timer%4==0)
+                penaltyBallMoving();
+            spritepositionupdate();
+            drawSpeedBar();
+        }
+        if((int)timer%2==0 &&  !kicked)
+            speedBar();
+        spriteshow();  
+        penaltyScore();
+        drawscoremarks();
     }
-
-    /*else if(page_number==3)
-
     else if(page_number==4)
-
-    else if(page_number==5)*/
-
+    { 
+        iShowImage(0,0,"highscores.png");
+        backbutton();
+    }
+    else if(page_number==5)
+    {
+        iShowImage(0,0,"settings.png");
+        volumeMark();
+        backbutton();
+    }
     else if(page_number==6)
+    {
+        iShowImage(0,0,"help.png");
+        backbutton();
+    }
+    else if(page_number==7)
     {
         iShowImage(0,0,"exitpage.jpg");
         if(tracktime+75<=timer)
@@ -1490,6 +1603,7 @@ void iDraw()
     sprintf(fpss,"fps %d",fps);
     iText(50,50,fpss);
 }
+
 /*
 function iMouseMove() is called when the user moves the mouse.
 (mx, my) is the position where the mouse pointer is.
@@ -1519,113 +1633,89 @@ void iMouse(int button, int state, int mx, int my)
         // place your codes here
         if(page_number==0 && timer>coverpagetime)
         {
-            if(mx>=134 && mx<=405)
+            if(mx>=136 && mx<=401)
             {
-                if(my>=720-403  && my<=720-360)
+                if(my<=412  && my>=377)
                 {
-                    page_number=12;
+                    page_number=1;
+                    gametime=0;
                 }
-                else if(my>=720-450  && my<=720-408)
+                else if(my<=370  && my>=333)
                 {
                     page_number=2;
                 }
-                else if(my>=720-495  && my<=720-455)
+                else if(my<=328  && my>=290)
+                {
                     page_number=3;
-                else if(my>=720-542  && my<=720-502)
+                }
+                else if(my<=284  && my>=248)
                     page_number=4;
-                else if(my>=720-588  && my<=720-548)
+                else if(my<=241  && my>=205)
                     page_number=5;
-                else if(my>=720-635  && my<=720-594)
+                else if(my<=199  && my>=163)
                     page_number=6;
+                else if(my<=157  && my>=120 )
+                    page_number=7;
             }
             tracktime=timer;
         }
-        else if(page_number==11)
-        {
-            if(mx>63 && mx<472)
-            {
-                if(my<720-196 && my>720-263)
-                    {level=1;page_number=1;resetvariables();}
-                else if(my<720-304 && my>720-368)
-                    {level=2;page_number=1;resetvariables();}
-                else if(my<720-400 && my>720-460)
-                    {level=3;page_number=1;resetvariables();}
-            }
-            else if(mx<65 && mx>5 && my<72 && my>50)
-                page_number=0;
-        }
-        else if(page_number==12)
-        {
-            if(mx>22 && mx<243)
-            {page_number=1;
-            gametime=0;}
-            else if(mx>281 && mx<520)
-            {page_number=3;}
-
-        }
-        else if(page_number==3 && mx>20 && mx<width-20){
-             targetX = mx;
-    targetY = my;
-
-    // only kick when ball is ready
-    if (ballstate == 2 && penaltyActive)
-    {
-        // 1) compute meter geometry
-        double fullH = penaltyMeterMaxY - penaltyMeterMinY;
-        double mid   = (penaltyMeterMaxY + penaltyMeterMinY) * 0.5;
-        // clamp penaltyMeterY just in case
-        double y = fmin(fmax(penaltyMeterY, penaltyMeterMinY), penaltyMeterMaxY);
-
-        // 2) offset from center, normalized [0..1]
-        double offset = fabs(y - mid);
-        double norm   = (offset * 2.0) / fullH;
-        if (norm > 1.0) norm = 1.0;
-
-        // 3) compute kick speed factor
-        double powerFac = 2.5 - norm;           // 1 at center, 0 at edges
-        double kickSpeed = ballSpeed * powerFac;
-
-        // if at exact edge → guaranteed miss: set kickSpeed=0
-        if (y <= penaltyMeterMinY || y >= penaltyMeterMaxY)
-            kickSpeed = 0.0;
-
-        // 4) compute direction vector
-        double dx = targetX - playerposition[activeTeam][activeplayer][0];
-        double dy = targetY - playerposition[activeTeam][activeplayer][1];
-        double mag = sqrt(dx*dx + dy*dy);
-        if (mag > 0 && kickSpeed > 0)
-        {
-            ballpointer[2] = (dx / mag) * kickSpeed;
-            ballpointer[3] = (dy / mag) * kickSpeed;
-        }
-        else
-        {
-            // zero speed → immediate miss
-            ballpointer[2] = ballpointer[3] = 0;
-            scoreMark = -1;   
-        }
-
-        // 5) set up deceleration & launch
-        varAcceleration[0] = -acceleration * (dx / (mag>0?mag:1));
-        varAcceleration[1] = -acceleration * (dy / (mag>0?mag:1));
-        ballpointer[0] = playerposition[activeTeam][activeplayer][0];
-        ballpointer[1] = playerposition[activeTeam][activeplayer][1];
-        iSetSpritePosition(&fball,
-            ballpointer[0] - ballradius,
-            ballpointer[1] - ballradius
-        );
-        ballstate = 0;
-    }
-
-        }
-        else if(page_number==1 || page_number==2 || page_number==3)
+        else if(page_number==1 || page_number==2)
         {
             if(mx<width && mx>width-20 && my<length && my>length-20)
             {
                 page_number=0;
-                penaltyActive=0;
+                iStopAllSounds();
                 gametime+=timer-tracktime;
             }
+        }
+        else if(page_number==3)
+        {
+            //crowd_sound();
+            if(mx<width && mx>width-20 && my<length && my>length-20)
+            {
+                page_number=0;
+                resetPenaltyVariables();
+            }
+            else
+            ballDirection(mx,my);
+            if(penaltyended==1)
+            {
+                if(mx>=width-70 && mx<=width-10 && my>=50 && my<=72)
+                {
+                    page_number=0;
+                    resetPenaltyVariables();
+                }
+            }
+        }
+        else if(page_number==5){
+            if (mx >= 300 && mx <= 400 && my >= 160 && my <= 200) { // Sound button
+                if (volume == 100) {
+                    volume = 0; // Turn sound OFF
+                    iStopAllSounds(); // Stop all sounds immediately
+                    printf("Sound turned OFF\n");
+                } else {
+                    volume = 100; // Turn sound ON
+                    printf("Sound turned ON\n");
+                }
+            }
+            if(mx>=(width-70) && mx<=(width-10) && my>=50 && my<=72){
+            page_number=0;
+            }
+        }
+        else if(page_number==4){
+                                if(mx>=(width-70) && mx<=(width-10) && my>=50 && my<=72){
+                            page_number=0;
+                    }
+        }
+        else if(page_number==6){
+                                if(mx>=(width-70) && mx<=(width-10) && my>=50 && my<=72){
+                            page_number=0;
+                    }
+        }
+        else if(page_number==7){
+                                if(mx>=(width-70) && mx<=(width-10) && my>=50 && my<=72){
+                            page_number=0;
+                    }
         }
     }
     if (button == GLUT_RIGHT_BUTTON && state == GLUT_DOWN)
@@ -1680,6 +1770,7 @@ int main(int argc, char *argv[])
     // place your own initialization codes here.
     loadresources();
     //iSetTimer(1, timeUpdater);
+    iInitializeSound();
     iInitialize(width, length, "2D Football");
     return 0;
 }
